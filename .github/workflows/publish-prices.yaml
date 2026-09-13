@@ -66,17 +66,13 @@ jobs:
             -f content="$(base64 -w0 v1/prices.json)" \
             --jq '.commit.html_url'
 
-      # Pinged only on full success. The check that matters is the absence of
-      # this ping: GitHub silently disables scheduled workflows in public repos
-      # after 60 days without repository activity, and commits made by the
-      # workflow itself do not reset that clock. A watchdog living in the same
-      # repo would be switched off alongside the thing it watches, so the
-      # dead man's switch has to be external.
-      - name: Report health
-        if: steps.scrape.outputs.code == '0' && env.HEALTHCHECK_URL != ''
-        env:
-          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
-        run: curl -fsS --retry 3 "$HEALTHCHECK_URL"
+      # Liveness is watched from outside GitHub rather than reported from
+      # inside it. GitHub silently disables scheduled workflows in public repos
+      # after 60 days without repository activity, and this workflow's own bot
+      # commits do not reset that clock -- so a watchdog living here would be
+      # switched off alongside the thing it watches. An external monitor polls
+      # this workflow's run history and the published file instead, which also
+      # checks the outcome rather than merely that the job fired.
 
       - name: Surface failures
         if: steps.scrape.outputs.code != '0'

@@ -132,6 +132,27 @@ def scrape_month(month: date, now: str) -> dict[str, Any]:
     return entry
 
 
+def _substance(months: dict[str, Any]) -> dict[str, Any]:
+    """Strip the fields that change on every run, leaving the actual figures."""
+    volatile = {"observed_at"}
+    return {
+        key: {
+            field: (
+                {k: v for k, v in value.items() if k not in volatile}
+                if isinstance(value, dict) and field == "gcv"
+                else {
+                    region: {k: v for k, v in data.items() if k not in volatile}
+                    for region, data in value.items()
+                }
+                if field == "regions"
+                else value
+            )
+            for field, value in entry.items()
+        }
+        for key, entry in months.items()
+    }
+
+
 def previous_month(month: date) -> date:
     """Return the month before month."""
     return (month.replace(day=1) - timedelta(days=1)).replace(day=1)
@@ -258,6 +279,13 @@ def main() -> int:
         for problem in problems:
             print(f"REJECTED: {problem}", file=sys.stderr)
         return 2
+
+    # Only rewrite when something substantive moved. Timestamps alone changing
+    # would commit four times a day and bury the price history in noise -- and
+    # would make file freshness look like a liveness signal when it is not.
+    if existing and _substance(existing.get("months", {})) == _substance(months):
+        print("No change.")
+        return 0
 
     document = {
         "schema_version": SCHEMA_VERSION,

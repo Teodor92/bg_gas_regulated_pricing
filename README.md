@@ -124,6 +124,11 @@ the best baseline it has: the published file's own previous month, else what it
 last believed, else the snapshot shipped with the release. The `data_source`
 attribute on the price sensor says which of those produced the current value.
 
+The publisher is watched from outside GitHub: one monitor checks that the file
+covers the current month with every supply area, another that the workflow has
+run successfully in the last 30 hours. A watchdog inside the repository would be
+disabled alongside the workflow it watches.
+
 If the published file is unreachable, the last known figure is used. Reading the
 documents directly is available in the integration's options but **off by
 default**: the likeliest reason a month is missing is that an operator changed
