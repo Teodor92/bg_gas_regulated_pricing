@@ -1,0 +1,85 @@
+name: Publish prices
+
+on:
+  schedule:
+    # Four times a day. The sources change monthly; this interval is about how
+    # quickly a new tariff reaches installs after it appears, not about
+    # catching changes.
+    - cron: "17 2,8,14,20 * * *"
+  workflow_dispatch:
+
+# Least privilege by default; the one job that writes asks for it explicitly.
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the scraper
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check out the published data
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: data
+          path: published
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+
+      - run: pip install "pypdf>=5.1.0"
+
+      - name: Scrape
+        id: scrape
+        run: |
+          set +e
+          python scripts/scrape.py \
+            --output published/v1/prices.json \
+            --verify-coverage
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      # Exit 2 means the month-over-month guard rejected the scrape and nothing
+      # was written. Exit 3 means the data was written but something that should
+      # have been published by now is missing -- that is worth committing and
+      # then failing on.
+      - name: Publish if changed
+        if: steps.scrape.outputs.code == '0' || steps.scrape.outputs.code == '3'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd published
+          if git diff --quiet -- v1/prices.json; then
+            echo "No change."
+            exit 0
+          fi
+          git diff --stat -- v1/prices.json
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/contents/v1/prices.json?ref=data" --jq .sha)
+          # Written through the Contents API rather than git push, so GitHub
+          # signs the commit.
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/v1/prices.json" \
+            -f message="Update published prices" \
+            -f branch=data \
+            -f sha="$SHA" \
+            -f content="$(base64 -w0 v1/prices.json)" \
+            --jq '.commit.html_url'
+
+      # Pinged only on full success. The check that matters is the absence of
+      # this ping: GitHub silently disables scheduled workflows in public repos
+      # after 60 days without repository activity, and commits made by the
+      # workflow itself do not reset that clock. A watchdog living in the same
+      # repo would be switched off alongside the thing it watches, so the
+      # dead man's switch has to be external.
+      - name: Report health
+        if: steps.scrape.outputs.code == '0' && env.HEALTHCHECK_URL != ''
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+        run: curl -fsS --retry 3 "$HEALTHCHECK_URL"
+
+      - name: Surface failures
+        if: steps.scrape.outputs.code != '0'
+        run: |
+          echo "scrape.py exited ${{ steps.scrape.outputs.code }}" >&2
+          exit 1
