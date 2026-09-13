@@ -24,26 +24,29 @@ PRICE_INDEX_URL: Final = (
 GCV_INDEX_URL: Final = "https://bulgartransgaz.bg/pages/sertifikat-46.html"
 GCV_BASE_URL: Final = "https://bulgartransgaz.bg/"
 
+# "name" becomes the config entry title, and therefore the prefix of every
+# entity id, so it is kept short. "area" is the full description shown as the
+# device model and in the setup dropdown.
 REGIONS: Final[dict[str, dict[str, str]]] = {
     "mrezhi": {
         "slug": "TSENA-SAJT_red",
-        "name": "Sofia and other Overgas Mrezhi areas",
-        "name_bg": "София и други райони на Овергаз Мрежи",
+        "name": "Overgas Mrezhi",
+        "area": "Sofia and other Overgas Mrezhi areas",
     },
     "bansko_razlog": {
         "slug": "TSENA-SAJT_red-KPG-Bansko-i-Razlog",
-        "name": "Bansko and Razlog (CNG)",
-        "name_bg": "Банско и Разлог (КПГ)",
+        "name": "Overgas Bansko",
+        "area": "Bansko and Razlog (CNG)",
     },
     "byala": {
         "slug": "TSENA-SAJT_red-KPG-Byala",
-        "name": "Byala (CNG)",
-        "name_bg": "Бяла (КПГ)",
+        "name": "Overgas Byala",
+        "area": "Byala (CNG)",
     },
     "karnobat": {
         "slug": "TSENA-SAJT_red-KPG-Karnobat",
-        "name": "Karnobat (CNG)",
-        "name_bg": "Карнобат (КПГ)",
+        "name": "Overgas Karnobat",
+        "area": "Karnobat (CNG)",
     },
 }
 

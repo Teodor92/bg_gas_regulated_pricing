@@ -125,8 +125,8 @@ class BgGasPriceSensor(CoordinatorEntity[BgGasPricingCoordinator], SensorEntity)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, coordinator.entry.entry_id)},
             entry_type=DeviceEntryType.SERVICE,
-            manufacturer="Overgas Mrezhi",
-            model=REGIONS[coordinator.region]["name"],
+            manufacturer="Overgas Mrezhi AD",
+            model=REGIONS[coordinator.region]["area"],
             name=coordinator.entry.title,
             configuration_url="https://www.overgas.bg/za-overgaz/produkti-i-uslugi/tseni-na-prirodniya-gaz/",
         )
