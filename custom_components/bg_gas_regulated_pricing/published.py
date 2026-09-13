@@ -141,6 +141,10 @@ def check_against(candidate: PublishedEntry, baseline: PublishedEntry | None) ->
     The dangerous failure is not a crash but a plausible wrong number: a table
     whose columns shifted can still sum correctly and still sit inside the
     static range bounds. Only a comparison with what came before catches it.
+
+    This is not proof against a slow drift within the threshold each month --
+    nothing at this layer is. It catches the abrupt, which is what a parser
+    regression and a bad commit both look like.
     """
     if baseline is None:
         return
@@ -160,6 +164,14 @@ def check_against(candidate: PublishedEntry, baseline: PublishedEntry | None) ->
             f"({(new_gcv - old_gcv) / old_gcv:+.1%}), beyond the "
             f"{MAX_GCV_DELTA:.0%} threshold"
         )
+
+
+def check_all(
+    candidate: PublishedEntry, baselines: list[PublishedEntry]
+) -> None:
+    """Reject a figure that disagrees with any independent baseline."""
+    for baseline in baselines:
+        check_against(candidate, baseline)
 
 
 def newest_entry(

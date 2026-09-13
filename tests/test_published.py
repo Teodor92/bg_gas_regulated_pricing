@@ -21,7 +21,7 @@ from custom_components.bg_gas_regulated_pricing.const import (
     SOURCE_SEED,
 )
 
-from .conftest import SEED
+from .conftest import FIXTURES, SEED
 
 
 async def _setup(hass: HomeAssistant, allow_direct: bool = False) -> MockConfigEntry:
@@ -167,3 +167,80 @@ async def test_grace_window_keeps_the_first_of_the_month_quiet(
         if "overgas.bg" in str(call[1])
     ]
     assert scraped == []
+
+
+async def test_a_stale_entry_is_checked_like_a_current_one(
+    hass: HomeAssistant, aioclient_mock, freezer
+) -> None:
+    """The start-of-month path must not wave a figure through unchecked.
+
+    On the 2nd the current month is usually not published yet, so the newest
+    entry is last month's. That branch runs every month, and anything it
+    accepts also becomes the baseline everything after it is judged against.
+    """
+    freezer.move_to("2026-10-02T09:00:00+03:00")
+    aioclient_mock.get(PUBLISHED_URL, content=mutate_board(
+        total_excl_vat=22.46,
+        components={"distribution": 18.71, "supply": 3.01, "extra": 0.74},
+    ))
+    entry = await _setup(hass)
+
+    state = _price(hass, entry)
+    assert float(state.state) == pytest.approx(0.85077168, abs=5e-8)
+    assert state.attributes["data_source"] == SOURCE_SEED
+
+
+async def test_a_consistent_but_wrong_file_is_still_caught(
+    hass: HomeAssistant, aioclient_mock, freezer
+) -> None:
+    """A file wrong throughout agrees with itself, so it needs an outside anchor."""
+    freezer.move_to("2026-09-13T12:00:00+03:00")
+    document = json.loads(SEED.read_text(encoding="utf-8"))
+    bad = document["months"]["2026-09"]["regions"]["mrezhi"]
+    bad["total_excl_vat"] = 22.46
+    bad["components"] = {"distribution": 18.71, "supply": 3.01, "extra": 0.74}
+    # A fabricated previous month that makes the tampering look like no change.
+    document["months"]["2026-08"] = json.loads(
+        json.dumps(document["months"]["2026-09"])
+    )
+    aioclient_mock.get(PUBLISHED_URL, content=json.dumps(document).encode())
+
+    entry = await _setup(hass)
+    assert _price(hass, entry).attributes["data_source"] == SOURCE_SEED
+
+
+async def test_a_genuine_month_change_is_accepted(
+    hass: HomeAssistant, aioclient_mock, freezer
+) -> None:
+    """The guard must not reject a real month-over-month move."""
+    freezer.move_to("2026-09-13T12:00:00+03:00")
+    board = (FIXTURES / "board_two_months.json").read_bytes()
+    aioclient_mock.get(PUBLISHED_URL, content=board)
+
+    entry = await _setup(hass)
+    state = _price(hass, entry)
+    assert state.attributes["data_source"] == SOURCE_PUBLISHED
+    assert float(state.state) == pytest.approx(0.85077168, abs=5e-8)
+
+
+async def test_does_not_walk_the_price_backwards(
+    hass: HomeAssistant, aioclient_mock, freezer, hass_storage
+) -> None:
+    """A publisher rollback must not overwrite a newer figure we already hold."""
+    freezer.move_to("2026-09-13T12:00:00+03:00")
+    aioclient_mock.get(PUBLISHED_URL, content=SEED.read_bytes())
+    entry = await _setup(hass)
+    assert _price(hass, entry).attributes["period"] == "2026-09-01"
+
+    # The board regresses to an older month only.
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    aioclient_mock.clear_requests()
+    old = json.loads(SEED.read_text(encoding="utf-8"))
+    old["months"] = {"2026-07": old["months"]["2026-09"]}
+    aioclient_mock.get(PUBLISHED_URL, content=json.dumps(old).encode())
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _price(hass, entry).attributes["period"] == "2026-09-01"

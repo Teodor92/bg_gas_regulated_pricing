@@ -34,6 +34,11 @@ from .coordinator import BgGasPricingCoordinator, GasPricingData
 
 # Volume unit is written out rather than taken from homeassistant.const so the
 # string matches what Bulgarian gas meters and Overgas invoices use.
+# The published tariff is denominated in euro and nothing here converts, so the
+# unit is fixed rather than taken from hass.config.currency. An installation
+# still configured for BGN would otherwise be shown a euro figure labelled as
+# lev -- wrong by the fixed 1.95583 rate, and silently costed that way.
+CURRENCY = "EUR"
 VOLUME_CUBIC_METERS = "m³"
 ENERGY_KILO_WATT_HOUR = "kWh"
 ENERGY_MEGA_WATT_HOUR = "MWh"
@@ -100,9 +105,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up the sensors for a config entry."""
     coordinator: BgGasPricingCoordinator = entry.runtime_data
-    currency = hass.config.currency or "EUR"
     async_add_entities(
-        BgGasPriceSensor(coordinator, description, currency)
+        BgGasPriceSensor(coordinator, description, CURRENCY)
         for description in SENSORS
     )
 

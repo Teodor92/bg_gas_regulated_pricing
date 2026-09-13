@@ -55,7 +55,7 @@ from .published import (
     MalformedDocumentError,
     PublishedEntry,
     UnsupportedSchemaError,
-    check_against,
+    check_all,
     entry_for,
     newest_entry,
     parse_document,
@@ -289,39 +289,75 @@ class BgGasPricingCoordinator(DataUpdateCoordinator[GasPricingData]):
         document = await self.hass.async_add_executor_job(parse_document, raw)
 
         if (entry := entry_for(document, month, self.region)) is not None:
-            check_against(entry, await self._async_baseline(document, month))
+            check_all(entry, await self._async_baselines(document, entry))
             return self._build(entry, SOURCE_PUBLISHED, month)
 
         # The month is not covered yet. That is routine on the 1st, and at the
         # gas year boundary where the calorific workbook becomes a new file.
+        # It is checked exactly as the current month is: this branch runs at the
+        # start of every month, which is when a bad figure is most likely to be
+        # met for the first time, and an unchecked figure here would also become
+        # the baseline that everything after it is judged against.
         if (older := newest_entry(document, self.region, month)) is not None:
+            check_all(older, await self._async_baselines(document, older))
             return self._build(older, SOURCE_PUBLISHED, month)
         return None
 
-    async def _async_baseline(
-        self, document: dict, month: date
-    ) -> PublishedEntry | None:
-        """Find the best figure to sanity-check a new reading against.
+    async def _async_baselines(
+        self, document: dict | None, candidate: PublishedEntry
+    ) -> list[PublishedEntry]:
+        """Collect every independent figure worth checking candidate against.
 
-        The published document's own previous month is the natural baseline,
-        but it is absent on a new install and while the file holds only one
-        month -- exactly when a bad figure would go unchallenged. Falling back
-        to what this install last believed, and then to the shipped snapshot,
-        keeps the check live from the first poll.
+        A reading must agree with all of them.
+
+        Two rules earn their keep here. Baselines are taken relative to the
+        candidate's own period rather than today's, because the candidate is
+        often last month's entry -- and asking the document for "the month
+        before today" would then hand back the candidate itself, which agrees
+        with itself perfectly. And there is always one baseline the document
+        did not supply: what this install last believed, or failing that the
+        snapshot shipped with the build. A file that is wrong throughout is
+        internally consistent, so a check sourced only from that file cannot
+        see it.
         """
-        prior = entry_for(document, previous_month(month), self.region)
-        if prior is not None:
-            return prior
+        baselines: list[PublishedEntry] = []
+
         if self._last_good is not None:
-            return self._last_good.as_baseline()
-        if (seed := await self._async_seed()) is not None:
-            return newest_entry(seed, self.region, month)
-        return None
+            baselines.append(self._last_good.as_baseline())
+        else:
+            seed = await self._async_seed()
+            # The snapshot is kept even when it covers the candidate's own
+            # month: comparing them still answers "has this month's published
+            # figure moved since the build shipped?", which is the question
+            # that matters on a first poll.
+            anchor = newest_entry(seed, self.region, candidate.period) if seed else None
+            if anchor is not None:
+                baselines.append(anchor)
+
+        if document is not None:
+            try:
+                prior = entry_for(
+                    document, previous_month(candidate.period), self.region
+                )
+            except MalformedDocumentError as err:
+                # A bad figure in a month we are not serving must not take down
+                # a good one we are.
+                _LOGGER.warning("Ignoring unusable prior month: %s", err)
+                prior = None
+            if prior is not None and prior.period != candidate.period:
+                baselines.append(prior)
+
+        return baselines
 
     async def _async_from_direct(self, month: date) -> GasPricingData:
         """Read the source documents from this install."""
         period, price = await self._async_price()
         gcv = await self._async_gcv(period)
+        # This path exists for the case where an operator changed their format
+        # and the publisher broke, which is precisely when a locally parsed
+        # figure is most likely to be wrong. Check it like any other.
+        candidate = PublishedEntry(period=period, price=price, gcv=gcv)
+        check_all(candidate, await self._async_baselines(None, candidate))
         return GasPricingData(
             period=period,
             price=price,
@@ -377,7 +413,13 @@ class BgGasPricingCoordinator(DataUpdateCoordinator[GasPricingData]):
             except (ParseError, *transport) as err:
                 _LOGGER.warning("Direct read failed as well: %s", err)
 
-        if published is not None:
+        # Accept a stale published figure only if it is not older than what we
+        # already hold. Otherwise a publisher rolled back, or a source that
+        # times out on the direct path, would walk the price backwards a month
+        # and overwrite the newer figure we had.
+        if published is not None and (
+            self._last_good is None or published.period >= self._last_good.period
+        ):
             return await self._async_accept(published)
 
         if self._last_good is not None:

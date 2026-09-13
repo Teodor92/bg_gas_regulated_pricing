@@ -2,5 +2,5 @@
     "name": "Bulgarian Natural Gas Regulated Prices",
     "render_readme": true,
     "country": "BG",
-    "homeassistant": "2024.6.0"
+    "homeassistant": "2024.11.0"
 }

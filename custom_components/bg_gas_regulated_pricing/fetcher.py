@@ -8,10 +8,11 @@ so a poll that finds nothing new costs a 304 rather than a re-download.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 
-from aiohttp import ClientResponseError, ClientSession
+from aiohttp import ClientError, ClientResponseError, ClientSession
 
 from .const import USER_AGENT
 
@@ -38,7 +39,17 @@ async def fetch(session: ClientSession, url: str, timeout: int = 60) -> bytes:
             headers["If-Modified-Since"] = cached.last_modified
 
     async with session.get(url, headers=headers, timeout=timeout) as response:
-        if response.status == 304 and cached is not None:
+        if response.status == 304:
+            if cached is None:
+                # Nothing was asked to be revalidated, so this is a broken
+                # server. Caching the empty body it sends would make every
+                # later poll revalidate into the same emptiness.
+                raise ClientResponseError(
+                    response.request_info,
+                    response.history,
+                    status=304,
+                    message="304 with nothing cached to revalidate",
+                )
             _LOGGER.debug("%s unchanged (304)", url)
             return cached.body
         response.raise_for_status()
@@ -62,19 +73,15 @@ async def page_modified(
 ) -> str | None:
     """Return a WordPress page's last-modified stamp, or None if unavailable.
 
-    Used only as a hint: a caller that gets None must fall back to reading the
-    page itself, and must never treat an unchanged stamp as authoritative when
-    it has nothing cached to fall back on.
+    Used only as a hint: every failure degrades to None so the caller reads the
+    page itself, rather than a cheap optimisation being able to fail the whole
+    update.
     """
     try:
         raw = await fetch_text(session, url, timeout)
-    except (ClientResponseError, OSError) as err:
+    except (ClientError, OSError) as err:
         _LOGGER.debug("Could not read change stamp from %s: %s", url, err)
         return None
-
-    # Deliberately not json.loads: the endpoint is a hint, and a malformed or
-    # unexpected response should degrade to "unknown" rather than raise.
-    import json
 
     try:
         value = json.loads(raw).get("modified_gmt")

@@ -30,7 +30,9 @@ jobs:
         with:
           python-version: "3.14"
 
-      - run: pip install "pypdf>=5.1.0"
+      # Pinned: this job holds a token that can write to the repository, so a
+      # dependency resolved at run time is a dependency that can use it.
+      - run: pip install pypdf==6.18.1
 
       - name: Scrape
         id: scrape

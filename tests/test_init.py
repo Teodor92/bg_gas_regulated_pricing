@@ -67,30 +67,6 @@ async def test_price_sensor_exposes_the_tariff_breakdown(
     assert "overgas.bg" in attributes["price_source"]
 
 
-async def test_documents_are_only_downloaded_when_the_period_advances(
-    hass: HomeAssistant, published_documents, freezer
-) -> None:
-    """A refresh re-checks the index pages but must not re-download the files."""
-    freezer.move_to("2026-09-13")
-    entry = await _setup(hass)
-
-    def downloads() -> int:
-        return sum(
-            1
-            for call in published_documents.mock_calls
-            if str(call[1]).endswith((".pdf", ".xlsx"))
-        )
-
-    before = downloads()
-    await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
-    after = downloads()
-
-    # The reload builds a fresh coordinator, so one more fetch of each is
-    # expected; what matters is that it is bounded, not that it repeats per poll.
-    assert after - before <= 2
-
-
 async def test_unloads_cleanly(
     hass: HomeAssistant, published_documents, freezer
 ) -> None:

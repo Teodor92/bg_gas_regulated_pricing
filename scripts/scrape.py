@@ -72,6 +72,26 @@ def current_month() -> date:
     return datetime.now(ZoneInfo(const.TIMEZONE)).date().replace(day=1)
 
 
+def scrape_gcv(month: date, now: str) -> dict[str, Any] | None:
+    """Collect the representative calorific value for month, if published."""
+    try:
+        index = fetch(const.GCV_INDEX_URL)[0].decode("utf-8", "replace")
+        url = parser.find_gcv_url(index, month)
+        body, modified = fetch(url)
+        value = parser.parse_gcv_xlsx(body, month, url)
+    except (ScrapeError, parser.ParseError) as err:
+        print(f"  gcv: not available for {month:%Y-%m} ({err})")
+        return None
+
+    return {
+        "value": value.value,
+        "unit": "kWh/m3",
+        "source_url": url,
+        "source_last_modified": http_date_to_iso(modified),
+        "observed_at": now,
+    }
+
+
 def scrape_month(month: date, now: str) -> dict[str, Any]:
     """Collect everything published for month.
 
@@ -82,20 +102,8 @@ def scrape_month(month: date, now: str) -> dict[str, Any]:
     """
     entry: dict[str, Any] = {"regions": {}}
 
-    try:
-        index = fetch(const.GCV_INDEX_URL)[0].decode("utf-8", "replace")
-        url = parser.find_gcv_url(index, month)
-        body, modified = fetch(url)
-        value = parser.parse_gcv_xlsx(body, month, url)
-        entry["gcv"] = {
-            "value": value.value,
-            "unit": "kWh/m3",
-            "source_url": url,
-            "source_last_modified": http_date_to_iso(modified),
-            "observed_at": now,
-        }
-    except (ScrapeError, parser.ParseError) as err:
-        print(f"  gcv: not available for {month:%Y-%m} ({err})")
+    if (gcv := scrape_gcv(month, now)) is not None:
+        entry["gcv"] = gcv
 
     try:
         index = fetch(const.PRICE_INDEX_URL)[0].decode("utf-8", "replace")
@@ -265,6 +273,18 @@ def main() -> int:
     print(f"Collecting {month:%Y-%m}")
     entry = scrape_month(month, now)
 
+    # The calorific value for next month is published about fifteen days ahead,
+    # so collect it as soon as it appears rather than waiting for the month to
+    # arrive. At the October boundary this is what puts the new gas year's
+    # figure in place before the tariff needs it.
+    upcoming = next_month(month)
+    upcoming_gcv = scrape_gcv(upcoming, now)
+    if upcoming_gcv is not None:
+        ahead = dict(months.get(f"{upcoming:%Y-%m}", {"regions": {}}))
+        ahead["gcv"] = upcoming_gcv
+        months[f"{upcoming:%Y-%m}"] = ahead
+        print(f"  {upcoming:%Y-%m} gcv: {upcoming_gcv['value']}")
+
     # Preserve anything previously recorded for this month that is missing now,
     # so a transient outage cannot erase a figure we already published.
     prior_entry = months.get(f"{month:%Y-%m}", {})
@@ -283,9 +303,23 @@ def main() -> int:
     # Only rewrite when something substantive moved. Timestamps alone changing
     # would commit four times a day and bury the price history in noise -- and
     # would make file freshness look like a liveness signal when it is not.
-    if existing and _substance(existing.get("months", {})) == _substance(months):
+    unchanged = bool(existing) and _substance(
+        existing.get("months", {})
+    ) == _substance(months)
+
+    gaps: list[str] = []
+    if options.verify_coverage:
+        today = datetime.now(ZoneInfo(const.TIMEZONE)).date()
+        gaps = check_coverage(months, today)
+        for gap in gaps:
+            print(f"MISSING: {gap}", file=sys.stderr)
+
+    # Checked before this returns: a figure that is missing produces no change
+    # by definition, so a coverage gap would otherwise be reported only on a
+    # run that happened to write something else.
+    if unchanged:
         print("No change.")
-        return 0
+        return 3 if gaps else 0
 
     document = {
         "schema_version": SCHEMA_VERSION,
@@ -299,15 +333,7 @@ def main() -> int:
         json.dumps(document, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     print(f"Wrote {options.output}")
-
-    if options.verify_coverage:
-        today = datetime.now(ZoneInfo(const.TIMEZONE)).date()
-        if gaps := check_coverage(months, today):
-            for gap in gaps:
-                print(f"MISSING: {gap}", file=sys.stderr)
-            return 3
-
-    return 0
+    return 3 if gaps else 0
 
 
 if __name__ == "__main__":
