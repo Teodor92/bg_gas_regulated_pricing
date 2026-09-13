@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
     ATTR_COMPONENTS,
+    ATTR_DATA_SOURCE,
     ATTR_GCV,
     ATTR_GCV_SOURCE,
     ATTR_PERIOD,
@@ -147,6 +148,7 @@ class BgGasPriceSensor(CoordinatorEntity[BgGasPricingCoordinator], SensorEntity)
         attributes: dict[str, Any] = {
             ATTR_PERIOD: data.period.isoformat(),
             ATTR_STALE: data.stale,
+            ATTR_DATA_SOURCE: data.source,
             ATTR_VAT_RATE: data.vat_rate,
             ATTR_GCV: data.gcv.value,
             ATTR_PRICE_SOURCE: data.price.source_url,

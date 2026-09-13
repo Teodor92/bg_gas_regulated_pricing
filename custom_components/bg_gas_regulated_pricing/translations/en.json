@@ -22,10 +22,12 @@
       "init": {
         "title": "Options",
         "data": {
-          "vat_rate": "VAT rate"
+          "vat_rate": "VAT rate",
+          "allow_direct": "Read the sources directly if the published data is unavailable"
         },
         "data_description": {
-          "vat_rate": "Applied to the published net tariff. Bulgarian households pay 20%."
+          "vat_rate": "Applied to the published net tariff. Bulgarian households pay 20%.",
+          "allow_direct": "Off by default. Prices are normally read from a single published file, so a parser fix reaches every installation at once. If that file is missing a month, the usual cause is that an operator changed their document format — in which case reading the sources here would hit the same problem, unseen."
         }
       }
     }
@@ -42,17 +44,31 @@
   },
   "entity": {
     "sensor": {
-      "price": { "name": "Price" },
-      "price_kwh": { "name": "Price per kWh" },
-      "price_mwh": { "name": "Price per MWh" },
-      "price_mwh_excl_vat": { "name": "Price per MWh excluding VAT" },
-      "calorific_value": { "name": "Calorific value" }
+      "price": {
+        "name": "Price"
+      },
+      "price_kwh": {
+        "name": "Price per kWh"
+      },
+      "price_mwh": {
+        "name": "Price per MWh"
+      },
+      "price_mwh_excl_vat": {
+        "name": "Price per MWh excluding VAT"
+      },
+      "calorific_value": {
+        "name": "Calorific value"
+      }
     }
   },
   "issues": {
     "stale_tariff": {
       "title": "Bulgarian gas tariff is out of date",
       "description": "Home Assistant is still using the tariff published for {period}, because the current month's document could not be read from Overgas. Gas costs are being calculated at the old price. Check {url} and report an issue if the page has changed format."
+    },
+    "unsupported_data_version": {
+      "title": "Bulgarian gas pricing needs updating",
+      "description": "The published price data uses a newer format than this version of the integration can read, so the last known figures are still in use. Update the integration in HACS."
     }
   }
 }

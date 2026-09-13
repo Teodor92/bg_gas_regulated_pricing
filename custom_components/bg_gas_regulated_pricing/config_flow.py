@@ -21,7 +21,15 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
-from .const import CONF_REGION, CONF_VAT_RATE, DEFAULT_VAT_RATE, DOMAIN, REGIONS
+from .const import (
+    CONF_ALLOW_DIRECT,
+    CONF_REGION,
+    CONF_VAT_RATE,
+    DEFAULT_ALLOW_DIRECT,
+    DEFAULT_VAT_RATE,
+    DOMAIN,
+    REGIONS,
+)
 
 VAT_SELECTOR = NumberSelector(
     NumberSelectorConfig(
@@ -78,11 +86,23 @@ class BgGasPricingOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        current = self.config_entry.options.get(
-            CONF_VAT_RATE,
-            self.config_entry.data.get(CONF_VAT_RATE, DEFAULT_VAT_RATE),
-        )
+        options = self.config_entry.options
+        data = self.config_entry.data
         schema = vol.Schema(
-            {vol.Required(CONF_VAT_RATE, default=current): VAT_SELECTOR}
+            {
+                vol.Required(
+                    CONF_VAT_RATE,
+                    default=options.get(
+                        CONF_VAT_RATE, data.get(CONF_VAT_RATE, DEFAULT_VAT_RATE)
+                    ),
+                ): VAT_SELECTOR,
+                vol.Required(
+                    CONF_ALLOW_DIRECT,
+                    default=options.get(
+                        CONF_ALLOW_DIRECT,
+                        data.get(CONF_ALLOW_DIRECT, DEFAULT_ALLOW_DIRECT),
+                    ),
+                ): bool,
+            }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -18,14 +19,23 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ALLOW_DIRECT,
     CONF_REGION,
     CONF_VAT_RATE,
+    DEFAULT_ALLOW_DIRECT,
     DEFAULT_VAT_RATE,
     DOMAIN,
     GCV_INDEX_URL,
     PRICE_INDEX_URL,
     PRICE_MODIFIED_URL,
+    PUBLISHED_GRACE_DAYS,
+    PUBLISHED_URL,
     REGIONS,
+    SEED_FILE,
+    SOURCE_CACHED,
+    SOURCE_DIRECT,
+    SOURCE_PUBLISHED,
+    SOURCE_SEED,
     STALE_AFTER_DAYS,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -40,6 +50,16 @@ from .parser import (
     find_price_url,
     parse_gcv_xlsx,
     parse_price_pdf,
+)
+from .published import (
+    MalformedDocumentError,
+    PublishedEntry,
+    UnsupportedSchemaError,
+    check_against,
+    entry_for,
+    newest_entry,
+    parse_document,
+    previous_month,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,6 +90,7 @@ class GasPricingData:
     gcv: CalorificValue
     vat_rate: float
     stale: bool = False
+    source: str = SOURCE_PUBLISHED
 
     @property
     def price_eur_mwh(self) -> float:
@@ -91,11 +112,16 @@ class GasPricingData:
         """
         return self.price_eur_kwh * self.gcv.value
 
+    def as_baseline(self) -> PublishedEntry:
+        """Expose this reading as a baseline for the month-over-month check."""
+        return PublishedEntry(period=self.period, price=self.price, gcv=self.gcv)
+
     def as_dict(self) -> dict[str, Any]:
         """Serialise for persistent storage."""
         return {
             "period": self.period.isoformat(),
             "vat_rate": self.vat_rate,
+            "source": self.source,
             "price": {
                 "total_excl_vat": self.price.total_excl_vat,
                 "components": dict(self.price.components),
@@ -125,6 +151,7 @@ class GasPricingData:
             ),
             vat_rate=raw["vat_rate"],
             stale=True,
+            source=SOURCE_CACHED,
         )
 
 
@@ -157,6 +184,14 @@ class BgGasPricingCoordinator(DataUpdateCoordinator[GasPricingData]):
         """VAT percentage to apply to the published net tariff."""
         return self.entry.options.get(
             CONF_VAT_RATE, self.entry.data.get(CONF_VAT_RATE, DEFAULT_VAT_RATE)
+        )
+
+    @property
+    def allow_direct(self) -> bool:
+        """Whether this install may scrape the sources itself."""
+        return self.entry.options.get(
+            CONF_ALLOW_DIRECT,
+            self.entry.data.get(CONF_ALLOW_DIRECT, DEFAULT_ALLOW_DIRECT),
         )
 
     async def async_restore(self) -> None:
@@ -225,34 +260,146 @@ class BgGasPricingCoordinator(DataUpdateCoordinator[GasPricingData]):
         self._gcv = value
         return value
 
-    async def _async_update_data(self) -> GasPricingData:
+    async def _async_seed(self) -> dict | None:
+        """Load the snapshot shipped with the release, if there is one."""
+        path = Path(__file__).parent / SEED_FILE
         try:
-            period, price = await self._async_price()
-            gcv = await self._async_gcv(period)
-        except (TimeoutError, ClientError, ParseError, OSError) as err:
-            # Holding the last known-good figure is deliberately preferred over
-            # going unavailable: the Energy dashboard multiplies this price by
-            # consumption as it accrues, so a gap produces silently uncosted
-            # energy that cannot be recomputed later.
-            if self._last_good is not None:
-                _LOGGER.warning(
-                    "Could not refresh Bulgarian gas pricing (%s); keeping the "
-                    "figure published for %s",
-                    err,
-                    self._last_good.period,
-                )
-                stale = replace(self._last_good, stale=True)
-                self._async_review_staleness(stale)
-                return stale
-            raise UpdateFailed(f"could not load Bulgarian gas pricing: {err}") from err
+            raw = await self.hass.async_add_executor_job(path.read_bytes)
+            return parse_document(raw)
+        except (OSError, MalformedDocumentError, UnsupportedSchemaError) as err:
+            _LOGGER.debug("No usable seed data: %s", err)
+            return None
 
-        data = GasPricingData(
+    def _build(
+        self, entry: PublishedEntry, source: str, month: date
+    ) -> GasPricingData:
+        return GasPricingData(
+            period=entry.period,
+            price=entry.price,
+            gcv=entry.gcv,
+            vat_rate=self.vat_rate,
+            stale=entry.period < month,
+            source=source,
+        )
+
+    async def _async_from_published(self, month: date) -> GasPricingData | None:
+        """Resolve this month from the centrally published data."""
+        session = async_get_clientsession(self.hass)
+        raw = await fetch(session, PUBLISHED_URL, REQUEST_TIMEOUT)
+        document = await self.hass.async_add_executor_job(parse_document, raw)
+
+        if (entry := entry_for(document, month, self.region)) is not None:
+            check_against(entry, await self._async_baseline(document, month))
+            return self._build(entry, SOURCE_PUBLISHED, month)
+
+        # The month is not covered yet. That is routine on the 1st, and at the
+        # gas year boundary where the calorific workbook becomes a new file.
+        if (older := newest_entry(document, self.region, month)) is not None:
+            return self._build(older, SOURCE_PUBLISHED, month)
+        return None
+
+    async def _async_baseline(
+        self, document: dict, month: date
+    ) -> PublishedEntry | None:
+        """Find the best figure to sanity-check a new reading against.
+
+        The published document's own previous month is the natural baseline,
+        but it is absent on a new install and while the file holds only one
+        month -- exactly when a bad figure would go unchallenged. Falling back
+        to what this install last believed, and then to the shipped snapshot,
+        keeps the check live from the first poll.
+        """
+        prior = entry_for(document, previous_month(month), self.region)
+        if prior is not None:
+            return prior
+        if self._last_good is not None:
+            return self._last_good.as_baseline()
+        if (seed := await self._async_seed()) is not None:
+            return newest_entry(seed, self.region, month)
+        return None
+
+    async def _async_from_direct(self, month: date) -> GasPricingData:
+        """Read the source documents from this install."""
+        period, price = await self._async_price()
+        gcv = await self._async_gcv(period)
+        return GasPricingData(
             period=period,
             price=price,
             gcv=gcv,
             vat_rate=self.vat_rate,
-            stale=period < current_month(),
+            stale=period < month,
+            source=SOURCE_DIRECT,
         )
+
+    async def _async_update_data(self) -> GasPricingData:
+        month = current_month()
+        today = dt_util.utcnow().astimezone(SOFIA).date()
+        transport = (ClientError, TimeoutError, OSError)
+
+        published: GasPricingData | None = None
+        unsupported = False
+        ir.async_delete_issue(
+            self.hass, DOMAIN, f"unsupported_data_version_{self.region}"
+        )
+        try:
+            published = await self._async_from_published(month)
+        except UnsupportedSchemaError as err:
+            # Do not route around this by scraping: the install is out of date
+            # and needs updating, not a workaround that may disagree with what
+            # every other install is reading.
+            _LOGGER.error("Published pricing data is too new to read: %s", err)
+            unsupported = True
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                f"unsupported_data_version_{self.region}",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="unsupported_data_version",
+            )
+        except (MalformedDocumentError, *transport) as err:
+            _LOGGER.warning("Could not read published pricing data: %s", err)
+
+        if published is not None and not published.stale:
+            return await self._async_accept(published)
+
+        # Scraping directly is a last resort, and only past the grace window:
+        # the likeliest reason a month is missing is that a source changed
+        # format and the publisher broke, in which case every install running
+        # the same parser would fail the same way, unseen.
+        if (
+            not unsupported
+            and self.allow_direct
+            and today.day > PUBLISHED_GRACE_DAYS
+        ):
+            try:
+                return await self._async_accept(await self._async_from_direct(month))
+            except (ParseError, *transport) as err:
+                _LOGGER.warning("Direct read failed as well: %s", err)
+
+        if published is not None:
+            return await self._async_accept(published)
+
+        if self._last_good is not None:
+            _LOGGER.warning(
+                "Keeping the figure published for %s", self._last_good.period
+            )
+            held = replace(self._last_good, stale=True, source=SOURCE_CACHED)
+            self._async_review_staleness(held)
+            return held
+
+        seed = await self._async_seed()
+        entry = newest_entry(seed, self.region, month) if seed else None
+        if entry is not None:
+            _LOGGER.warning("Falling back to the snapshot shipped with this build")
+            data = self._build(entry, SOURCE_SEED, month)
+            self._async_review_staleness(data)
+            return data
+
+        raise UpdateFailed("no Bulgarian gas pricing available from any source")
+
+    async def _async_accept(self, data: GasPricingData) -> GasPricingData:
+        """Record a resolved reading and report on its freshness."""
         self._last_good = data
         await self._store.async_save(data.as_dict())
         self._async_review_staleness(data)

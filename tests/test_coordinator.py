@@ -12,12 +12,14 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.bg_gas_regulated_pricing.const import (
+    CONF_ALLOW_DIRECT,
     CONF_REGION,
     CONF_VAT_RATE,
     DOMAIN,
     GCV_INDEX_URL,
     PRICE_INDEX_URL,
     PRICE_MODIFIED_URL,
+    PUBLISHED_URL,
 )
 from custom_components.bg_gas_regulated_pricing.coordinator import current_month
 
@@ -51,12 +53,18 @@ def build_workbook(header: str, rows: list[tuple[str, float]]) -> bytes:
     return buffer.getvalue()
 
 
-async def _setup(hass: HomeAssistant) -> MockConfigEntry:
+async def _setup(
+    hass: HomeAssistant, allow_direct: bool = False
+) -> MockConfigEntry:
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id="mrezhi",
         title="Overgas Mrezhi",
-        data={CONF_REGION: "mrezhi", CONF_VAT_RATE: 20.0},
+        data={
+            CONF_REGION: "mrezhi",
+            CONF_VAT_RATE: 20.0,
+            CONF_ALLOW_DIRECT: allow_direct,
+        },
     )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
@@ -85,6 +93,10 @@ async def test_calorific_value_follows_the_tariff_month_not_today(
     """
     freezer.move_to("2026-10-02T09:00:00+03:00")
 
+    from aiohttp import ClientError
+
+    # The board is unavailable, so this install reads the sources itself.
+    aioclient_mock.get(PUBLISHED_URL, exc=ClientError("unreachable"))
     aioclient_mock.get(
         PRICE_MODIFIED_URL, content=b'{"modified_gmt":"2026-09-01T06:29:03"}'
     )
@@ -112,7 +124,7 @@ async def test_calorific_value_follows_the_tariff_month_not_today(
         content=build_workbook("месец/month 2026-2027", [("October/Октомври", 11.02)]),
     )
 
-    entry = await _setup(hass)
+    entry = await _setup(hass, allow_direct=True)
 
     # September's tariff paired with September's 10.76, never October's 11.02.
     assert float(_state(hass, entry, "calorific_value").state) == pytest.approx(10.76)
@@ -132,17 +144,17 @@ async def test_fresh_month_is_not_marked_stale(
 
 
 async def test_unchanged_page_stamp_avoids_refetching_the_index(
-    hass: HomeAssistant, published_documents, freezer
+    hass: HomeAssistant, no_board, source_documents, freezer
 ) -> None:
     """The 71-byte change stamp should short-circuit the 19 KB index fetch."""
     freezer.move_to("2026-09-13T12:00:00+03:00")
-    entry = await _setup(hass)
+    entry = await _setup(hass, allow_direct=True)
     coordinator = entry.runtime_data
 
     def index_fetches() -> int:
         return sum(
             1
-            for call in published_documents.mock_calls
+            for call in source_documents.mock_calls
             if str(call[1]) == PRICE_INDEX_URL
         )
 
@@ -187,7 +199,7 @@ async def test_last_known_good_survives_a_restart_during_an_outage(
 
     # Both operators are now unreachable.
     aioclient_mock.clear_requests()
-    for url in (PRICE_MODIFIED_URL, PRICE_INDEX_URL, GCV_INDEX_URL):
+    for url in (PUBLISHED_URL, PRICE_MODIFIED_URL, PRICE_INDEX_URL, GCV_INDEX_URL):
         aioclient_mock.get(url, exc=ClientError("unreachable"))
 
     await hass.config_entries.async_setup(entry.entry_id)

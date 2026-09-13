@@ -8,8 +8,38 @@ DOMAIN: Final = "bg_gas_regulated_pricing"
 
 CONF_REGION: Final = "region"
 CONF_VAT_RATE: Final = "vat_rate"
+CONF_ALLOW_DIRECT: Final = "allow_direct"
 
 DEFAULT_VAT_RATE: Final = 20.0
+
+# Scraping happens once, centrally, and the result is published here. Reading it
+# means a parser fix reaches every install on the next poll instead of waiting
+# for each user to notice and install a release.
+PUBLISHED_URL: Final = (
+    "https://raw.githubusercontent.com/Teodor92/bg_gas_regulated_pricing"
+    "/data/v1/prices.json"
+)
+
+# The major version is in the URL above, so a future format lives at a
+# different path and old installs keep reading the one they understand. A
+# document claiming a major this code does not know is never parsed.
+SUPPORTED_SCHEMA_VERSION: Final = 1
+
+# Shipped with the release as a starting point, so a fresh install has a
+# plausible figure before its first fetch succeeds, and so the month-over-month
+# check has something to compare against on first run.
+SEED_FILE: Final = "seed.json"
+
+# Falling back to scraping is off by default. The most likely reason the
+# published data is missing a month is that a source changed format and the
+# scraper broke -- in which case every install falling back would run the same
+# broken parser, turning one visible failure into many invisible ones.
+DEFAULT_ALLOW_DIRECT: Final = False
+
+# Grace period before the published data missing the current month is treated
+# as a problem. Overgas published September at 06:24 UTC on the 1st, so an
+# install polling early on the 1st is simply early.
+PUBLISHED_GRACE_DAYS: Final = 1
 
 # Overgas publishes one PDF per licensed supply area, under a dated
 # /wp-content/uploads/<YYYY>/<MM>/ path that changes every month. The slug is
@@ -85,6 +115,12 @@ MAX_PRICE_EUR_MWH: Final = 400.0
 MIN_GCV_KWH_M3: Final = 9.0
 MAX_GCV_KWH_M3: Final = 12.0
 
+# The same month-over-month bounds the publisher applies, re-checked here. A
+# figure is not trusted because we produced it: this catches a scraper bug, a
+# bad commit, and a tampered file with one mechanism.
+MAX_TARIFF_DELTA: Final = 0.25
+MAX_GCV_DELTA: Final = 0.05
+
 # Tolerance when checking that the components add up to the stated total, and
 # that the lev table matches the euro table. Both tables are published rounded
 # to the eurocent, so small residuals are expected.
@@ -106,3 +142,9 @@ ATTR_VAT_RATE: Final = "vat_rate"
 ATTR_PRICE_SOURCE: Final = "price_source"
 ATTR_GCV_SOURCE: Final = "calorific_value_source"
 ATTR_STALE: Final = "stale"
+ATTR_DATA_SOURCE: Final = "data_source"
+
+SOURCE_PUBLISHED: Final = "published"
+SOURCE_DIRECT: Final = "direct"
+SOURCE_CACHED: Final = "cached"
+SOURCE_SEED: Final = "seed"

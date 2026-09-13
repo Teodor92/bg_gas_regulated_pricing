@@ -108,15 +108,27 @@ way that is painful to unwind. The integration therefore:
 - [Булгартрансгаз — Представителна калоричност](https://bulgartransgaz.bg/pages/sertifikat-46.html)
 - [Булгартрансгаз — Методика за превръщане в енергийни единици](https://bulgartransgaz.bg/files/useruploads/files/GDU/methodology_GCV.pdf)
 
-Polling is deliberately cheap. Overgas is WordPress, so the integration asks its
-REST endpoint when the page last changed — 71 bytes — and only reads the page
-itself when that stamp advances. The calorific value is fetched once per month,
-because a published figure does not change. Documents are revalidated with
-`If-None-Match`. A poll that finds nothing new costs well under a kilobyte.
+### Where the figures come from
 
-Both are scraped from published documents, not an API, so the format can change
-without notice. If it does, the integration will hold its last value and raise a
-repair issue — please open an issue here as well.
+Neither operator offers an API, so both documents have to be read. That happens
+**once, centrally**: a scheduled job reads them and publishes the result to
+[`data/v1/prices.json`](https://github.com/Teodor92/bg_gas_regulated_pricing/blob/data/v1/prices.json),
+which is what your installation fetches. The point is not bandwidth — it is that
+when an operator changes a document's format, the fix is a commit that reaches
+every installation on its next poll, rather than a release each user has to
+notice and install while their cost history quietly accrues at a stale price.
+
+Your installation does not take that on trust. It re-checks the component sum,
+the range, and the month-over-month movement of everything it receives, against
+the best baseline it has: the published file's own previous month, else what it
+last believed, else the snapshot shipped with the release. The `data_source`
+attribute on the price sensor says which of those produced the current value.
+
+If the published file is unreachable, the last known figure is used. Reading the
+documents directly is available in the integration's options but **off by
+default**: the likeliest reason a month is missing is that an operator changed
+their format, in which case every installation reading directly would hit the
+same problem at once, unseen.
 
 ## Licence
 

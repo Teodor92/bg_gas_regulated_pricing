@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-13T12:55:29Z",
+  "generator": "bg-gas-scraper/1.0.0",
+  "notice": "Derived from documents published by „Овергаз Мрежи“ АД and „Булгартрансгаз“ ЕАД.",
+  "months": {
+    "2026-09": {
+      "regions": {
+        "mrezhi": {
+          "total_excl_vat": 65.89,
+          "unit": "EUR/MWh",
+          "components": {
+            "distribution": 18.71,
+            "supply": 3.01,
+            "transmission_access": 1.74,
+            "delivery": 42.43
+          },
+          "source_url": "https://www.overgas.bg/wp-content/uploads/2026/09/TSENA-SAJT_red.pdf",
+          "source_last_modified": "2026-09-01T06:24:31Z",
+          "observed_at": "2026-09-13T12:55:29Z"
+        },
+        "bansko_razlog": {
+          "total_excl_vat": 82.4,
+          "unit": "EUR/MWh",
+          "components": {
+            "distribution": 18.71,
+            "supply": 3.01,
+            "transmission_access": 1.74,
+            "delivery": 42.43,
+            "compression": 16.51
+          },
+          "source_url": "https://www.overgas.bg/wp-content/uploads/2026/09/TSENA-SAJT_red-KPG-Bansko-i-Razlog.pdf",
+          "source_last_modified": "2026-09-01T06:24:32Z",
+          "observed_at": "2026-09-13T12:55:29Z"
+        },
+        "byala": {
+          "total_excl_vat": 87.69,
+          "unit": "EUR/MWh",
+          "components": {
+            "distribution": 18.71,
+            "supply": 3.01,
+            "transmission_access": 1.74,
+            "delivery": 42.43,
+            "compression": 21.8
+          },
+          "source_url": "https://www.overgas.bg/wp-content/uploads/2026/09/TSENA-SAJT_red-KPG-Byala.pdf",
+          "source_last_modified": "2026-09-01T06:24:34Z",
+          "observed_at": "2026-09-13T12:55:29Z"
+        },
+        "karnobat": {
+          "total_excl_vat": 83.42,
+          "unit": "EUR/MWh",
+          "components": {
+            "distribution": 18.71,
+            "supply": 3.01,
+            "transmission_access": 1.74,
+            "delivery": 42.43,
+            "compression": 17.53
+          },
+          "source_url": "https://www.overgas.bg/wp-content/uploads/2026/09/TSENA-SAJT_red-KPG-Karnobat.pdf",
+          "source_last_modified": "2026-09-01T06:24:36Z",
+          "observed_at": "2026-09-13T12:55:29Z"
+        }
+      },
+      "gcv": {
+        "value": 10.76,
+        "unit": "kWh/m3",
+        "source_url": "https://bulgartransgaz.bg/files/useruploads/files/2026/R_GCV_25_26August.xlsx",
+        "source_last_modified": "2026-08-25T11:26:50Z",
+        "observed_at": "2026-09-13T12:55:29Z"
+      }
+    }
+  }
+}
