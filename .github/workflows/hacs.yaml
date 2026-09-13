@@ -14,3 +14,8 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # The brands check only gates inclusion in the HACS default store,
+          # not installation from a custom repository. Remove this ignore when
+          # submitting to hacs/default, which requires a home-assistant/brands
+          # entry (or brand/icon.png here) first.
+          ignore: brands
