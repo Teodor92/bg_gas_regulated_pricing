@@ -1,0 +1,58 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bulgarian Natural Gas Regulated Pricing",
+        "description": "Choose the Overgas supply area your home is connected to. The tariff is published monthly by Overgas, and converted from MWh to cubic metres using the representative calorific value set by Bulgartransgaz.",
+        "data": {
+          "region": "Supply area",
+          "vat_rate": "VAT rate"
+        },
+        "data_description": {
+          "vat_rate": "Applied to the published net tariff. Bulgarian households pay 20%."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This supply area is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options",
+        "data": {
+          "vat_rate": "VAT rate"
+        },
+        "data_description": {
+          "vat_rate": "Applied to the published net tariff. Bulgarian households pay 20%."
+        }
+      }
+    }
+  },
+  "selector": {
+    "region": {
+      "options": {
+        "mrezhi": "Sofia and other Overgas Mrezhi areas",
+        "bansko_razlog": "Bansko and Razlog (CNG)",
+        "byala": "Byala (CNG)",
+        "karnobat": "Karnobat (CNG)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "price": { "name": "Price" },
+      "price_kwh": { "name": "Price per kWh" },
+      "price_mwh": { "name": "Price per MWh" },
+      "price_mwh_excl_vat": { "name": "Price per MWh excluding VAT" },
+      "calorific_value": { "name": "Calorific value" }
+    }
+  },
+  "issues": {
+    "stale_tariff": {
+      "title": "Bulgarian gas tariff is out of date",
+      "description": "Home Assistant is still using the tariff published for {period}, because the current month's document could not be read from Overgas. Gas costs are being calculated at the old price. Check {url} and report an issue if the page has changed format."
+    }
+  }
+}
