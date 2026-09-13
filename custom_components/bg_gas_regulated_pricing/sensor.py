@@ -24,6 +24,7 @@ from .const import (
     ATTR_GCV_SOURCE,
     ATTR_PERIOD,
     ATTR_PRICE_SOURCE,
+    ATTR_STALE,
     ATTR_VAT_RATE,
     DOMAIN,
     REGIONS,
@@ -145,6 +146,7 @@ class BgGasPriceSensor(CoordinatorEntity[BgGasPricingCoordinator], SensorEntity)
             return None
         attributes: dict[str, Any] = {
             ATTR_PERIOD: data.period.isoformat(),
+            ATTR_STALE: data.stale,
             ATTR_VAT_RATE: data.vat_rate,
             ATTR_GCV: data.gcv.value,
             ATTR_PRICE_SOURCE: data.price.source_url,

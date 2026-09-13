@@ -18,6 +18,28 @@ PRICE_INDEX_URL: Final = (
     "https://www.overgas.bg/za-overgaz/produkti-i-uslugi/tseni-na-prirodniya-gaz/"
 )
 
+# The price page is WordPress, and its REST endpoint reports when the page last
+# changed in 71 bytes -- against roughly 19 KB of gzipped HTML for the page
+# itself. Since the page only changes when a new tariff is published, this is
+# the cheap way to ask "is there anything new?" several times a day. The page id
+# is advertised by the page's own Link header; if the endpoint ever stops
+# answering, the index page is fetched directly instead.
+PRICE_MODIFIED_URL: Final = (
+    "https://www.overgas.bg/wp-json/wp/v2/pages/8184?_fields=modified_gmt"
+)
+
+# Sent on every request so the operators can identify the traffic and have
+# somewhere to complain to, rather than only somewhere to block.
+USER_AGENT: Final = (
+    "bg_gas_regulated_pricing "
+    "(+https://github.com/Teodor92/bg_gas_regulated_pricing)"
+)
+
+# Both operators publish on a Bulgarian calendar. Deriving "which month is it"
+# from Home Assistant's configured timezone would move the month boundary for
+# anyone not running in Sofia time.
+TIMEZONE: Final = "Europe/Sofia"
+
 # Bulgartransgaz, as transmission system operator, sets the representative
 # gross calorific value used to convert metered volume into energy. Published
 # no later than 15 days before the month it applies to.
@@ -72,9 +94,15 @@ FX_TOLERANCE: Final = 0.01
 # Data older than this many days into a new month raises a repair issue.
 STALE_AFTER_DAYS: Final = 3
 
+# Last known-good figures survive a restart here, so an outage that spans one
+# does not leave the Energy dashboard recording consumption with no cost at all.
+STORAGE_VERSION: Final = 1
+STORAGE_KEY: Final = f"{DOMAIN}.last_known_good"
+
 ATTR_COMPONENTS: Final = "components"
 ATTR_PERIOD: Final = "period"
 ATTR_GCV: Final = "calorific_value"
 ATTR_VAT_RATE: Final = "vat_rate"
 ATTR_PRICE_SOURCE: Final = "price_source"
 ATTR_GCV_SOURCE: Final = "calorific_value_source"
+ATTR_STALE: Final = "stale"

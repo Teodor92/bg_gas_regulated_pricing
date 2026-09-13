@@ -45,7 +45,7 @@ COMPONENT_LABELS = (
     ("compression", "Цена за компресиране"),
 )
 
-_ROW_RE = re.compile(r"Битови\s*клиенти((?:\s+\d+[.,]\d+){4,8})")
+_ROW_RE = re.compile(r"Битови\s*клиенти((?:\s+\d+[.,]\d+){5,9})")
 _EUR_MARKER = "евро/МВтч"
 _LEV_MARKER = "лева/МВтч"
 

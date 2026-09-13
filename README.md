@@ -83,6 +83,10 @@ A wrong price is worse than a missing one: the Energy dashboard multiplies it by
 consumption as that accrues, so a bad figure quietly corrupts cost history in a
 way that is painful to unwind. The integration therefore:
 
+- **pairs the two halves by month** — the calorific value is always fetched for
+  the month the tariff is for, never for today. A late tariff combined with the
+  new month's energy content produces a number that passes every other check
+  while being wrong;
 - **verifies the tariff adds up** — the last column of the published table is the
   end price and the preceding columns are its components, so the parser checks
   they sum correctly rather than assuming a fixed column count (the CNG areas
@@ -93,7 +97,8 @@ way that is painful to unwind. The integration therefore:
 - **bounds every figure** — a tariff outside 20–400 EUR/MWh or a calorific value
   outside 9–12 kWh/m³ is rejected as a parse failure;
 - **holds the last known-good value** if a source is unreachable, rather than
-  going unavailable and leaving consumption uncosted;
+  going unavailable and leaving consumption uncosted — and persists it, so a
+  restart during an outage does not lose it either;
 - **raises a repair issue** if it is still serving a previous month's tariff more
   than three days into a new month.
 
@@ -102,6 +107,12 @@ way that is painful to unwind. The integration therefore:
 - [Овергаз Мрежи — Цени на природния газ](https://www.overgas.bg/za-overgaz/produkti-i-uslugi/tseni-na-prirodniya-gaz/)
 - [Булгартрансгаз — Представителна калоричност](https://bulgartransgaz.bg/pages/sertifikat-46.html)
 - [Булгартрансгаз — Методика за превръщане в енергийни единици](https://bulgartransgaz.bg/files/useruploads/files/GDU/methodology_GCV.pdf)
+
+Polling is deliberately cheap. Overgas is WordPress, so the integration asks its
+REST endpoint when the page last changed — 71 bytes — and only reads the page
+itself when that stamp advances. The calorific value is fetched once per month,
+because a published figure does not change. Documents are revalidated with
+`If-None-Match`. A poll that finds nothing new costs well under a kilobyte.
 
 Both are scraped from published documents, not an API, so the format can change
 without notice. If it does, the integration will hold its last value and raise a

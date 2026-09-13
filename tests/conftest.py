@@ -20,14 +20,28 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     return
 
 
+@pytest.fixture(autouse=True)
+def clear_document_cache():
+    """Reset the module-level fetch cache so it cannot leak between tests."""
+    from custom_components.bg_gas_regulated_pricing.fetcher import clear_cache
+
+    clear_cache()
+    yield
+    clear_cache()
+
+
 @pytest.fixture(name="published_documents")
 def published_documents_fixture(aioclient_mock):
     """Serve the real September 2026 documents to the integration."""
     from custom_components.bg_gas_regulated_pricing.const import (
         GCV_INDEX_URL,
         PRICE_INDEX_URL,
+        PRICE_MODIFIED_URL,
     )
 
+    aioclient_mock.get(
+        PRICE_MODIFIED_URL, content=b'{"modified_gmt":"2026-09-01T06:29:03"}'
+    )
     aioclient_mock.get(
         PRICE_INDEX_URL, content=(FIXTURES / "price_index.html").read_bytes()
     )
