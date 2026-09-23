@@ -165,6 +165,20 @@ def test_finds_the_workbook_for_the_right_gas_year() -> None:
     assert "R_GCV_25_26" in find_gcv_url(index, date(2026, 9, 1))
 
 
+def test_workbook_with_a_mistyped_end_year_is_found() -> None:
+    # As published for 2026-2027: the filename says 26_26.
+    index = '<a href="files/useruploads/files/R_GCV_26_26October.xlsx">2026-2027</a>'
+    assert find_gcv_url(index, date(2026, 10, 1)).endswith("R_GCV_26_26October.xlsx")
+
+
+def test_exact_end_year_wins_over_a_mistyped_one() -> None:
+    index = (
+        '<a href="files/R_GCV_26_26October.xlsx">x</a>'
+        '<a href="files/R_GCV_26_27October.xlsx">y</a>'
+    )
+    assert find_gcv_url(index, date(2026, 10, 1)).endswith("R_GCV_26_27October.xlsx")
+
+
 def test_missing_gas_year_is_rejected() -> None:
     index = (FIXTURES / "gcv_index.html").read_text(errors="replace")
     with pytest.raises(ParseError, match="no calorific value workbook"):

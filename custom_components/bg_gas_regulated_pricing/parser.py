@@ -273,15 +273,26 @@ def find_price_url(index_html: str, slug: str) -> tuple[date, str]:
 
 
 def find_gcv_url(index_html: str, moment: date) -> str:
-    """Find the calorific value workbook for the gas year containing moment."""
+    """Find the calorific value workbook for the gas year containing moment.
+
+    Filenames are typed by hand and the end year is not reliable: the 2026-2027
+    workbook went up as R_GCV_26_26October.xlsx. So the start year picks the
+    file, an exact end year wins if both exist, and parse_gcv_xlsx checks the
+    gas year in the workbook's own header before reading a value from it.
+    """
     start, end = gas_year(moment)
     pattern = re.compile(
         r"""["'](?P<url>[^"']*?R_GCV_(?P<start>\d{2})_(?P<end>\d{2})[^"']*?\.xlsx)["']""",
         re.IGNORECASE,
     )
-    for match in pattern.finditer(index_html):
-        if int(match.group("start")) == start and int(match.group("end")) == end:
-            return urljoin(GCV_BASE_URL, match.group("url"))
+    candidates = [
+        match
+        for match in pattern.finditer(index_html)
+        if int(match.group("start")) == start
+    ]
+    candidates.sort(key=lambda match: int(match.group("end")) != end)
+    if candidates:
+        return urljoin(GCV_BASE_URL, candidates[0].group("url"))
     raise ParseError(
         f"no calorific value workbook published for gas year {start:02d}-{end:02d}"
     )
