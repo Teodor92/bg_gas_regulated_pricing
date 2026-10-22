@@ -1,9 +1,19 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-02T08:36:28Z",
+  "generated_at": "2026-10-22T18:34:51Z",
   "generator": "bg-gas-scraper/1.0.0",
   "notice": "Derived from documents published by „Овергаз Мрежи“ АД and „Булгартрансгаз“ ЕАД.",
   "months": {
+    "2026-11": {
+      "regions": {},
+      "gcv": {
+        "value": 10.83,
+        "unit": "kWh/m3",
+        "source_url": "https://bulgartransgaz.bg/files/useruploads/files/R_GCV_26_26November.xlsx",
+        "source_last_modified": "2026-10-22T14:10:44Z",
+        "observed_at": "2026-10-22T18:34:51Z"
+      }
+    },
     "2026-10": {
       "regions": {
         "mrezhi": {
@@ -17,7 +27,7 @@
           },
           "source_url": "https://www.overgas.bg/wp-content/uploads/2026/10/TSENA-SAJT_red.pdf",
           "source_last_modified": "2026-10-02T07:38:25Z",
-          "observed_at": "2026-10-02T08:36:28Z"
+          "observed_at": "2026-10-22T18:34:51Z"
         },
         "bansko_razlog": {
           "total_excl_vat": 85.41,
@@ -31,7 +41,7 @@
           },
           "source_url": "https://www.overgas.bg/wp-content/uploads/2026/10/TSENA-SAJT_red-KPG-Bansko-i-Razlog.pdf",
           "source_last_modified": "2026-10-02T07:38:27Z",
-          "observed_at": "2026-10-02T08:36:28Z"
+          "observed_at": "2026-10-22T18:34:51Z"
         },
         "byala": {
           "total_excl_vat": 90.7,
@@ -45,7 +55,7 @@
           },
           "source_url": "https://www.overgas.bg/wp-content/uploads/2026/10/TSENA-SAJT_red-KPG-Byala.pdf",
           "source_last_modified": "2026-10-02T07:38:28Z",
-          "observed_at": "2026-10-02T08:36:28Z"
+          "observed_at": "2026-10-22T18:34:51Z"
         },
         "karnobat": {
           "total_excl_vat": 86.43,
@@ -59,15 +69,15 @@
           },
           "source_url": "https://www.overgas.bg/wp-content/uploads/2026/10/TSENA-SAJT_red-KPG-Karnobat.pdf",
           "source_last_modified": "2026-10-02T07:38:30Z",
-          "observed_at": "2026-10-02T08:36:28Z"
+          "observed_at": "2026-10-22T18:34:51Z"
         }
       },
       "gcv": {
         "value": 10.8,
         "unit": "kWh/m3",
-        "source_url": "https://bulgartransgaz.bg/files/useruploads/files/R_GCV_26_26October.xlsx",
-        "source_last_modified": "2026-09-23T12:14:48Z",
-        "observed_at": "2026-10-02T08:36:28Z"
+        "source_url": "https://bulgartransgaz.bg/files/useruploads/files/R_GCV_26_26November.xlsx",
+        "source_last_modified": "2026-10-22T14:10:44Z",
+        "observed_at": "2026-10-22T18:34:51Z"
       }
     },
     "2026-09": {
