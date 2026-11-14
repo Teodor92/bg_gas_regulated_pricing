@@ -8,6 +8,6 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/Teodor92/bg_gas_regulated_pricing/issues",
-  "requirements": ["pypdf>=5.1.0"],
+  "requirements": ["pypdf>=6.21.4"],
   "version": "0.3.1"
 }
